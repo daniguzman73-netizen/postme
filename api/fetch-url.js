@@ -1,24 +1,21 @@
-// api/fetch-url.js  —  fetches a URL server-side and returns clean text
-// Sits alongside api/generate.js in your Vercel project
+// api/fetch-url.js — fetches a URL server-side and returns clean text
 
-const MAX_CONTENT_LENGTH = 20_000; // chars — enough for a long article, caps token cost
+const MAX_CONTENT_LENGTH = 20_000;
 
 function extractText(html) {
-  // Remove scripts, styles, nav, footer, ads
   let text = html
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/<style[\s\S]*?<\/style>/gi, "")
     .replace(/<nav[\s\S]*?<\/nav>/gi, "")
     .replace(/<footer[\s\S]*?<\/footer>/gi, "")
     .replace(/<header[\s\S]*?<\/header>/gi, "")
-    .replace(/<[^>]+>/g, " ")       // strip remaining tags
+    .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
-    .replace(/\s{2,}/g, " ")        // collapse whitespace
+    .replace(/\s{2,}/g, " ")
     .trim();
-
   return text.slice(0, MAX_CONTENT_LENGTH);
 }
 
@@ -27,14 +24,19 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // Allow all origins for now — API key is still safe server-side
   res.setHeader("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") return res.status(200).end();
 
   const { url } = req.body;
 
-  // Basic URL validation
   let parsed;
+  try {
+    parsed = new URL(url);
+    if (!["http:", "https:"].includes(parsed.protocol)) throw new Error();
+  } catch {
+    return res.status(400).json({ error: "Invalid URL" });
+  }
+
   // Detect social platforms that require login
   const hostname = parsed.hostname.replace("www.", "");
   const socialMessages = {
@@ -45,13 +47,6 @@ export default async function handler(req, res) {
   };
   if (socialMessages[hostname]) {
     return res.status(422).json({ error: socialMessages[hostname] });
-  }
-
-  try {
-    parsed = new URL(url);
-    if (!["http:", "https:"].includes(parsed.protocol)) throw new Error();
-  } catch {
-    return res.status(400).json({ error: "Invalid URL" });
   }
 
   try {
@@ -88,9 +83,9 @@ export default async function handler(req, res) {
 
   } catch (err) {
     if (err.name === "TimeoutError") {
-      return res.status(504).json({ error: "Page took too long to load" });
+      return res.status(504).json({ error: "Page took too long to load. Try Paste Text instead." });
     }
     console.error("Fetch error:", err);
-    return res.status(500).json({ error: "Could not read the page" });
+    return res.status(500).json({ error: "Could not read the page. Try Paste Text instead." });
   }
 }
