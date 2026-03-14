@@ -125,26 +125,44 @@ export default function PostMe(){
   const generate=useCallback(async()=>{
     setLoading(true);setGenerating(true);setError("");setResult("");
     setTimeout(()=>resultRef.current?.scrollIntoView({behavior:"smooth",block:"start"}),100);
-    try{
-      // If content is a URL, fetch its text content via the proxy first
-      let content=state.content;
-      if(state.contentType==="url"){
-        const r=await fetch("/api/fetch-url",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:state.content})});
-        let d;
-        try{d=await r.json();}catch{throw new Error("Could not reach the server. Are the proxy endpoints deployed?");}
-        if(!r.ok)throw new Error(d.error||"Could not read this URL. Open the article, select all the text (Ctrl+A), copy it, and paste it in the Paste Text tab instead.");
-        content=d.text;
+
+    // Step 1: resolve content
+    let content=state.content;
+    if(state.contentType==="url"){
+      let urlResult;
+      try{
+        urlResult=await fetch("/api/fetch-url",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:state.content})});
+      }catch(e){
+        setGenerating(false);setLoading(false);
+        setError("Could not reach the server. Please try again.");
+        return;
       }
+      let urlData;
+      try{urlData=await urlResult.json();}catch(e){
+        setGenerating(false);setLoading(false);
+        setError("Could not read the server response. Please try again.");
+        return;
+      }
+      if(!urlResult.ok){
+        setGenerating(false);setLoading(false);
+        setError(urlData.error||"Could not read this URL. Try copying the text and using Paste Text instead.");
+        return;
+      }
+      content=urlData.text;
+    }
+
+    // Step 2: generate post
+    try{
       const [text]=await Promise.allSettled([
         callClaude(buildPrompt({content,take:state.take,platform:state.platform,sliders:state.sliders})),
         new Promise(r=>setTimeout(r,3800)),
       ]);
       setGenerating(false);setLoading(false);
       if(text.status==="fulfilled"){setResult(text.value);}
-      else{setError("Something went wrong. Please try again.");}
+      else{setError("Generation failed. Please try again.");}
     }catch(err){
       setGenerating(false);setLoading(false);
-      setError(err.message||"Something went wrong. Please try again.");
+      setError("Generation failed. Please try again.");
     }
   },[state]);
 
