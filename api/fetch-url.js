@@ -1,0 +1,84 @@
+// api/fetch-url.js  —  fetches a URL server-side and returns clean text
+// Sits alongside api/generate.js in your Vercel project
+
+const MAX_CONTENT_LENGTH = 20_000; // chars — enough for a long article, caps token cost
+
+function extractText(html) {
+  // Remove scripts, styles, nav, footer, ads
+  let text = html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<nav[\s\S]*?<\/nav>/gi, "")
+    .replace(/<footer[\s\S]*?<\/footer>/gi, "")
+    .replace(/<header[\s\S]*?<\/header>/gi, "")
+    .replace(/<[^>]+>/g, " ")       // strip remaining tags
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\s{2,}/g, " ")        // collapse whitespace
+    .trim();
+
+  return text.slice(0, MAX_CONTENT_LENGTH);
+}
+
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const origin = req.headers.origin;
+  const allowed = process.env.ALLOWED_ORIGIN || "http://localhost:3000";
+  if (origin !== allowed) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  res.setHeader("Access-Control-Allow-Origin", allowed);
+
+  const { url } = req.body;
+
+  // Basic URL validation
+  let parsed;
+  try {
+    parsed = new URL(url);
+    if (!["http:", "https:"].includes(parsed.protocol)) throw new Error();
+  } catch {
+    return res.status(400).json({ error: "Invalid URL" });
+  }
+
+  try {
+    const response = await fetch(parsed.href, {
+      headers: {
+        // Pretend to be a browser so sites don't block us
+        "User-Agent": "Mozilla/5.0 (compatible; PostMe/1.0)",
+        "Accept": "text/html,application/xhtml+xml",
+      },
+      redirect: "follow",
+      signal: AbortSignal.timeout(8000), // 8s timeout
+    });
+
+    if (!response.ok) {
+      return res.status(422).json({ error: `Could not fetch page (${response.status})` });
+    }
+
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.includes("text/html") && !contentType.includes("text/plain")) {
+      return res.status(422).json({ error: "URL doesn't point to a readable page" });
+    }
+
+    const html = await response.text();
+    const text = extractText(html);
+
+    if (text.length < 100) {
+      return res.status(422).json({ error: "Page doesn't have enough readable content" });
+    }
+
+    return res.status(200).json({ text });
+
+  } catch (err) {
+    if (err.name === "TimeoutError") {
+      return res.status(504).json({ error: "Page took too long to load" });
+    }
+    console.error("Fetch error:", err);
+    return res.status(500).json({ error: "Could not read the page" });
+  }
+}
