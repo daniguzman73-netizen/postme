@@ -132,7 +132,7 @@ export default function PostMe(){
         const r=await fetch("/api/fetch-url",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:state.content})});
         let d;
         try{d=await r.json();}catch{throw new Error("Could not reach the server. Are the proxy endpoints deployed?");}
-        if(!r.ok)throw new Error(d.error||"Could not read the URL");
+        if(!r.ok)throw new Error(d.error||"Could not read this URL. Open the article, select all the text (Ctrl+A), copy it, and paste it in the Paste Text tab instead.");
         content=d.text;
       }
       const [text]=await Promise.allSettled([
