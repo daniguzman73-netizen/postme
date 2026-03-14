@@ -48,16 +48,19 @@ export default async function handler(req, res) {
   try {
     const response = await fetch(parsed.href, {
       headers: {
-        // Pretend to be a browser so sites don't block us
-        "User-Agent": "Mozilla/5.0 (compatible; PostMe/1.0)",
-        "Accept": "text/html,application/xhtml+xml",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
       },
       redirect: "follow",
-      signal: AbortSignal.timeout(8000), // 8s timeout
+      signal: AbortSignal.timeout(8000),
     });
 
     if (!response.ok) {
-      return res.status(422).json({ error: `Could not fetch page (${response.status})` });
+      if (response.status === 403 || response.status === 401) {
+        return res.status(422).json({ error: "This site is blocking access. Try copying the article text and using Paste Text instead." });
+      }
+      return res.status(422).json({ error: `Could not fetch page (${response.status}). Try Paste Text instead.` });
     }
 
     const contentType = response.headers.get("content-type") || "";
