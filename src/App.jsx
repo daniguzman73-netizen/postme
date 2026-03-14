@@ -50,9 +50,9 @@ function Btn({children,onClick,disabled,variant="primary",style={}}){
   return <button onClick={onClick} disabled={disabled} style={{padding:"13px 24px",borderRadius:10,fontSize:14,fontWeight:600,cursor:disabled?"not-allowed":"pointer",fontFamily:"inherit",opacity:disabled?0.4:1,transition:"opacity 0.15s",...s,...style}}>{children}</button>;
 }
 
-function SliderRow({slider,value,onChange,disabled}){
+function SliderRow({slider,value,onChange}){
   return(
-    <div style={{marginBottom:28,opacity:disabled?0.4:1,transition:"opacity 0.3s",pointerEvents:disabled?"none":"auto"}}>
+    <div style={{marginBottom:28}}>
       <style>{`input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:${T.text};cursor:pointer;border:3px solid white;box-shadow:0 0 0 1.5px ${T.text}}input[type=range]::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:${T.text};border:3px solid white}`}</style>
       <div style={{fontSize:12,fontWeight:600,color:T.text,letterSpacing:"0.04em",textTransform:"uppercase",marginBottom:10}}>{slider.emoji} {slider.label}</div>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -68,7 +68,7 @@ function SliderRow({slider,value,onChange,disabled}){
   );
 }
 
-function Section({label, number, active, children}){
+function Section({label,number,active,children}){
   return(
     <div style={{marginBottom:0,opacity:active?1:0.35,transition:"opacity 0.4s",pointerEvents:active?"auto":"none"}}>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
@@ -108,14 +108,12 @@ function LoadingBar(){
 }
 
 export default function PostMe(){
-  const [state,setState]=useState({content:"",contentType:"text",fileName:"",take:"",platform:"",sliders:{tone:50,focus:50,hero:50,length:50}});
+  const [state,setState]=useState({content:"",contentType:"text",take:"",platform:"",sliders:{tone:50,focus:50,hero:50,length:50}});
   const [result,setResult]=useState("");
   const [loading,setLoading]=useState(false);
   const [generating,setGenerating]=useState(false);
   const [error,setError]=useState("");
-  const [tab,setTab]=useState("url");
   const [copied,setCopied]=useState(false);
-  const fileRef=useRef();
   const resultRef=useRef();
 
   const hasContent=state.content.trim().length>0;
@@ -125,36 +123,9 @@ export default function PostMe(){
   const generate=useCallback(async()=>{
     setLoading(true);setGenerating(true);setError("");setResult("");
     setTimeout(()=>resultRef.current?.scrollIntoView({behavior:"smooth",block:"start"}),100);
-
-    // Step 1: resolve content
-    let content=state.content;
-    if(state.contentType==="url"){
-      let urlResult;
-      try{
-        urlResult=await fetch("/api/fetch-url",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:state.content})});
-      }catch(e){
-        setGenerating(false);setLoading(false);
-        setError("Could not reach the server. Please try again.");
-        return;
-      }
-      let urlData;
-      try{urlData=await urlResult.json();}catch(e){
-        setGenerating(false);setLoading(false);
-        setError("Could not read the server response. Please try again.");
-        return;
-      }
-      if(!urlResult.ok){
-        setGenerating(false);setLoading(false);
-        setError(urlData.error||"Could not read this URL. Try copying the text and using Paste Text instead.");
-        return;
-      }
-      content=urlData.text;
-    }
-
-    // Step 2: generate post
     try{
       const [text]=await Promise.allSettled([
-        callClaude(buildPrompt({content,take:state.take,platform:state.platform,sliders:state.sliders})),
+        callClaude(buildPrompt({content:state.content,take:state.take,platform:state.platform,sliders:state.sliders})),
         new Promise(r=>setTimeout(r,3800)),
       ]);
       setGenerating(false);setLoading(false);
@@ -162,13 +133,13 @@ export default function PostMe(){
       else{setError("Generation failed. Please try again.");}
     }catch(err){
       setGenerating(false);setLoading(false);
-      setError("Generation failed. Please try again.");
+      setError(err.message||"Generation failed. Please try again.");
     }
   },[state]);
 
   const reset=()=>{
-    setState({content:"",contentType:"text",fileName:"",take:"",platform:"",sliders:{tone:50,focus:50,hero:50,length:50}});
-    setResult("");setError("");setGenerating(false);setLoading(false);setTab("url");
+    setState({content:"",contentType:"text",take:"",platform:"",sliders:{tone:50,focus:50,hero:50,length:50}});
+    setResult("");setError("");setGenerating(false);setLoading(false);
     window.scrollTo({top:0,behavior:"smooth"});
   };
 
@@ -191,21 +162,17 @@ export default function PostMe(){
           {/* Section 1 – Content */}
           <Section label="What are you sharing?" number="1" active={true}>
             <div style={{display:"flex",gap:3,marginBottom:16,background:T.bg,borderRadius:10,padding:3}}>
-              <button onClick={()=>setTab("url")} style={{flex:1,padding:"8px 0",border:"none",borderRadius:8,cursor:"pointer",background:tab==="url"?T.surface:"transparent",color:tab==="url"?T.text:T.muted,fontWeight:tab==="url"?600:400,fontSize:13,fontFamily:"inherit",boxShadow:tab==="url"?"0 1px 4px rgba(0,0,0,0.08)":"none"}}>URL</button>
-              <button onClick={()=>setTab("text")} style={{flex:1,padding:"8px 0",border:"none",borderRadius:8,cursor:"pointer",background:tab==="text"?T.surface:"transparent",color:tab==="text"?T.text:T.muted,fontWeight:tab==="text"?600:400,fontSize:13,fontFamily:"inherit",boxShadow:tab==="text"?"0 1px 4px rgba(0,0,0,0.08)":"none"}}>Paste Text</button>
-              <div style={{flex:1,padding:"8px 4px",borderRadius:8,textAlign:"center",opacity:0.4,cursor:"not-allowed"}}>
-                <div style={{fontSize:13,color:T.muted,fontFamily:"inherit"}}>Upload File</div>
+              <button onClick={()=>setState(s=>({...s,contentType:"text"}))} style={{flex:1,padding:"8px 0",border:"none",borderRadius:8,cursor:"pointer",background:T.surface,color:T.text,fontWeight:600,fontSize:13,fontFamily:"inherit",boxShadow:"0 1px 4px rgba(0,0,0,0.08)"}}>Paste Text</button>
+              <div style={{flex:1,padding:"8px 4px",borderRadius:8,textAlign:"center",opacity:0.4,userSelect:"none"}}>
+                <div style={{fontSize:13,color:T.muted}}>URL</div>
+                <div style={{fontSize:10,fontWeight:700,color:T.accent,marginTop:2}}>Coming soon</div>
+              </div>
+              <div style={{flex:1,padding:"8px 4px",borderRadius:8,textAlign:"center",opacity:0.4,userSelect:"none"}}>
+                <div style={{fontSize:13,color:T.muted}}>Upload File</div>
                 <div style={{fontSize:10,fontWeight:700,color:T.accent,marginTop:2}}>Coming soon</div>
               </div>
             </div>
-            {tab==="url"&&<input type="url" placeholder="https://yourcompany.com/blog/post" value={state.contentType==="url"?state.content:""} onChange={e=>setState(s=>({...s,content:e.target.value,contentType:"url"}))} style={iStyle}/>}
-            {tab==="text"&&<textarea placeholder="Paste the company post, article, or message here…" value={state.contentType==="text"?state.content:""} onChange={e=>setState(s=>({...s,content:e.target.value,contentType:"text"}))} rows={5} style={{...iStyle,resize:"vertical",lineHeight:1.6}}/>}
-            {tab==="file"&&(
-              <div onClick={()=>fileRef.current.click()} style={{border:`2px dashed ${T.border}`,borderRadius:12,padding:"32px 20px",textAlign:"center",cursor:"pointer",background:state.fileName?T.accentLight:T.surface}}>
-                <input ref={fileRef} type="file" accept=".txt,.pdf,.doc,.docx" onChange={async e=>{const f=e.target.files[0];if(!f)return;const t=await f.text();setState(s=>({...s,content:t,contentType:"file",fileName:f.name}));}} style={{display:"none"}}/>
-                {state.fileName?<><div style={{fontSize:28}}>📄</div><div style={{fontSize:14,fontWeight:600,color:T.text,marginTop:8}}>{state.fileName}</div></>:<><div style={{fontSize:28}}>⬆️</div><div style={{fontSize:14,fontWeight:600,color:T.text,marginTop:8}}>Drop a file or click to browse</div><div style={{fontSize:12,color:T.muted,marginTop:4}}>PDF, DOC, TXT</div></>}
-              </div>
-            )}
+            <textarea placeholder="Paste the company post, article, or message here…" value={state.content} onChange={e=>setState(s=>({...s,content:e.target.value,contentType:"text"}))} rows={5} style={{...iStyle,resize:"vertical",lineHeight:1.6}}/>
           </Section>
 
           <Divider/>
@@ -229,7 +196,7 @@ export default function PostMe(){
 
           {/* Section 3 – Style */}
           <Section label="Your style" number="3" active={hasContent&&hasPlatform}>
-            {SLIDERS.map(sl=><SliderRow key={sl.id} slider={sl} value={state.sliders[sl.id]} onChange={v=>setState(s=>({...s,sliders:{...s.sliders,[sl.id]:v}}))} disabled={false}/>)}
+            {SLIDERS.map(sl=><SliderRow key={sl.id} slider={sl} value={state.sliders[sl.id]} onChange={v=>setState(s=>({...s,sliders:{...s.sliders,[sl.id]:v}}))}/>)}
           </Section>
 
           <Divider/>
