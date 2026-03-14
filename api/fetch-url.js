@@ -83,9 +83,12 @@ export default async function handler(req, res) {
 
   } catch (err) {
     if (err.name === "TimeoutError") {
-      return res.status(504).json({ error: "Page took too long to load. Try Paste Text instead." });
+      return res.status(422).json({ error: "Page took too long to load. Open the article, select all the text (Ctrl+A), copy it, and paste it in the Paste Text tab instead." });
     }
-    console.error("Fetch error:", err);
-    return res.status(500).json({ error: "Could not read the page. Try Paste Text instead." });
+    if (err.name === "TypeError" && err.message.includes("fetch")) {
+      return res.status(422).json({ error: "Could not reach this URL. Check the address is correct, or paste the article text in the Paste Text tab instead." });
+    }
+    console.error("Fetch error:", err.name, err.message);
+    return res.status(422).json({ error: "Could not read this page. Open the article, select all the text (Ctrl+A), copy it, and paste it in the Paste Text tab instead." });
   }
 }
