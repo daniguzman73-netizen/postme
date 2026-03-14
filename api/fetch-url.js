@@ -35,6 +35,18 @@ export default async function handler(req, res) {
 
   // Basic URL validation
   let parsed;
+  // Detect social platforms that require login
+  const hostname = parsed.hostname.replace("www.", "");
+  const socialMessages = {
+    "linkedin.com": "LinkedIn posts require you to be logged in, so we can't fetch them automatically. Copy the post text and paste it in the Paste Text tab instead.",
+    "x.com": "X (Twitter) posts can't be fetched automatically. Copy the post text and paste it in the Paste Text tab instead.",
+    "twitter.com": "X (Twitter) posts can't be fetched automatically. Copy the post text and paste it in the Paste Text tab instead.",
+    "facebook.com": "Facebook posts require you to be logged in, so we can't fetch them automatically. Copy the post text and paste it in the Paste Text tab instead.",
+  };
+  if (socialMessages[hostname]) {
+    return res.status(422).json({ error: socialMessages[hostname] });
+  }
+
   try {
     parsed = new URL(url);
     if (!["http:", "https:"].includes(parsed.protocol)) throw new Error();
