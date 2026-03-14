@@ -27,9 +27,9 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const origin = req.headers.origin;
-  const allowed = process.env.ALLOWED_ORIGIN || "http://localhost:3000";
-  if (origin !== allowed) {
+  const origin = req.headers.origin || "";
+  const allowed = (process.env.ALLOWED_ORIGIN || "http://localhost:3000").replace(/\/$/, "");
+  if (origin.replace(/\/$/, "") !== allowed) {
     return res.status(403).json({ error: "Forbidden" });
   }
   res.setHeader("Access-Control-Allow-Origin", allowed);
