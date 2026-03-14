@@ -32,12 +32,9 @@ export default async function handler(req, res) {
   }
 
   // 2. CORS — replace with your actual domain before going public
-  const origin = req.headers.origin || "";
-  const allowed = (process.env.ALLOWED_ORIGIN || "http://localhost:3000").replace(/\/$/, "");
-  if (origin.replace(/\/$/, "") !== allowed) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
-  res.setHeader("Access-Control-Allow-Origin", allowed);
+  // Allow all origins for now — API key is still safe server-side
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  if (req.method === "OPTIONS") return res.status(200).end();
 
   // 3. Rate limit by IP
   const ip = req.headers["x-forwarded-for"]?.split(",")[0] || "unknown";
