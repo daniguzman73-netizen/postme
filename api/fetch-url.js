@@ -62,9 +62,9 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       if (response.status === 403 || response.status === 401) {
-        return res.status(422).json({ error: "This site is blocking access. Try copying the article text and using Paste Text instead." });
+        return res.status(422).json({ error: "This site doesn't allow external access to its content. Open the article, select all the text (Ctrl+A), copy it, and paste it in the Paste Text tab instead." });
       }
-      return res.status(422).json({ error: `Could not fetch page (${response.status}). Try Paste Text instead.` });
+      return res.status(422).json({ error: "Couldn't load this page. Open the article, select all the text (Ctrl+A), copy it, and paste it in the Paste Text tab instead." });
     }
 
     const contentType = response.headers.get("content-type") || "";
@@ -76,7 +76,7 @@ export default async function handler(req, res) {
     const text = extractText(html);
 
     if (text.length < 100) {
-      return res.status(422).json({ error: "Page doesn't have enough readable content" });
+      return res.status(422).json({ error: "Couldn't extract enough content from this page. Open the article, select all the text (Ctrl+A), copy it, and paste it in the Paste Text tab instead." });
     }
 
     return res.status(200).json({ text });
