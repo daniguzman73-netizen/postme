@@ -1,21 +1,17 @@
-// api/generate.js  —  deploy this on Vercel (free tier is fine)
-// Your Anthropic API key lives ONLY here, as an environment variable.
-// The frontend never sees it.
+// api/generate.js
+// When content is a URL, Claude fetches it directly using Anthropic's
+// web fetch tool — no separate scraping infrastructure needed.
 
 const ANTHROPIC_API = "https://api.anthropic.com/v1/messages";
 
-// --- Simple in-memory rate limiter ---
-// Resets when the serverless function cold-starts, but good enough for abuse prevention.
-// For a production app, replace with Vercel KV or Upstash Redis.
 const ipHits = new Map();
-const RATE_LIMIT = 5;        // max requests per IP
-const RATE_WINDOW = 60_000;  // per 60 seconds
+const RATE_LIMIT = 5;
+const RATE_WINDOW = 60_000;
 
 function isRateLimited(ip) {
   const now = Date.now();
   const entry = ipHits.get(ip) || { count: 0, start: now };
   if (now - entry.start > RATE_WINDOW) {
-    // Window expired — reset
     ipHits.set(ip, { count: 1, start: now });
     return false;
   }
@@ -25,36 +21,107 @@ function isRateLimited(ip) {
   return false;
 }
 
+const SOCIAL_DOMAINS = ["linkedin.com", "x.com", "twitter.com", "facebook.com"];
+
+function isSocialUrl(url) {
+  try {
+    const hostname = new URL(url).hostname.replace("www.", "");
+    return SOCIAL_DOMAINS.some(d => hostname === d || hostname.endsWith("." + d));
+  } catch { return false; }
+}
+
+function isUrl(str) {
+  try { new URL(str); return str.startsWith("http"); }
+  catch { return false; }
+}
+
 export default async function handler(req, res) {
-  // 1. Only allow POST
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // 2. CORS — replace with your actual domain before going public
-  // Allow all origins for now — API key is still safe server-side
   res.setHeader("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") return res.status(200).end();
 
-  // 3. Rate limit by IP
   const ip = req.headers["x-forwarded-for"]?.split(",")[0] || "unknown";
   if (isRateLimited(ip)) {
     return res.status(429).json({ error: "Too many requests. Please wait a moment." });
   }
 
-  // 4. Validate the request body — only accept a prompt string, nothing else
-  const { prompt } = req.body;
-  if (!prompt || typeof prompt !== "string" || prompt.length > 4000) {
+  const { prompt, url } = req.body;
+
+  // Handle URL mode
+  if (url) {
+    if (isSocialUrl(url)) {
+      const messages = {
+        "linkedin.com": "LinkedIn posts require you to be logged in, so we can't fetch them automatically. Copy the post text and use Paste Text instead.",
+        "x.com": "X (Twitter) posts can't be fetched automatically. Copy the post text and use Paste Text instead.",
+        "twitter.com": "X (Twitter) posts can't be fetched automatically. Copy the post text and use Paste Text instead.",
+        "facebook.com": "Facebook posts require you to be logged in, so we can't fetch them automatically. Copy the post text and use Paste Text instead.",
+      };
+      const hostname = new URL(url).hostname.replace("www.", "");
+      const msg = Object.entries(messages).find(([k]) => hostname === k || hostname.endsWith("." + k));
+      return res.status(422).json({ error: msg?.[1] || "This social platform requires login." });
+    }
+
+    // Use Anthropic's web fetch tool to read the URL
+    try {
+      const response = await fetch(ANTHROPIC_API, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": process.env.ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+          "anthropic-beta": "web-fetch-2025-09-10",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          tools: [{
+            type: "web_fetch_20250910",
+            name: "web_fetch",
+            max_uses: 1,
+          }],
+          messages: [{
+            role: "user",
+            content: prompt, // prompt already contains the URL and instructions
+          }],
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        console.error("Anthropic error:", data);
+        return res.status(502).json({ error: "Could not read the URL. Try copying the text and using Paste Text instead." });
+      }
+
+      const text = data.content
+        ?.filter(b => b.type === "text")
+        .map(b => b.text)
+        .join("")
+        .trim();
+
+      if (!text) return res.status(502).json({ error: "Could not extract content from the URL. Try Paste Text instead." });
+
+      return res.status(200).json({ text });
+
+    } catch (err) {
+      console.error("Web fetch error:", err);
+      return res.status(500).json({ error: "Could not read this page. Try copying the text and using Paste Text instead." });
+    }
+  }
+
+  // Handle text mode
+  if (!prompt || typeof prompt !== "string" || prompt.length > 8000) {
     return res.status(400).json({ error: "Invalid request" });
   }
 
-  // 5. Forward to Anthropic — API key stays server-side
   try {
     const response = await fetch(ANTHROPIC_API, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY,   // set this in Vercel env vars
+        "x-api-key": process.env.ANTHROPIC_API_KEY,
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
@@ -65,22 +132,22 @@ export default async function handler(req, res) {
     });
 
     const data = await response.json();
-
     if (!response.ok) {
       console.error("Anthropic error:", data);
       return res.status(502).json({ error: "Generation failed. Please try again." });
     }
 
     const text = data.content
-      ?.filter((b) => b.type === "text")
-      .map((b) => b.text)
+      ?.filter(b => b.type === "text")
+      .map(b => b.text)
       .join("")
       .trim();
 
+    if (!text) throw new Error("No response");
     return res.status(200).json({ text });
 
   } catch (err) {
     console.error("Proxy error:", err);
-    return res.status(500).json({ error: "Server error. Please try again." });
+    return res.status(500).json({ error: "Generation failed. Please try again." });
   }
 }
