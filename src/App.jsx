@@ -37,8 +37,8 @@ Writing rules — follow these strictly:
 Output ONLY the post text, nothing else.`;
 }
 
-async function callClaude(prompt, url=null){
-  const body = url ? { url, prompt } : { prompt };
+async function callClaude(prompt, url){
+  const body = url ? {url, prompt} : {prompt};
   const res=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
   const data=await res.json();
   if(!res.ok)throw new Error(data.error||"Request failed");
@@ -71,7 +71,7 @@ function SliderRow({slider,value,onChange}){
 
 function Section({label,number,active,children}){
   return(
-    <div style={{marginBottom:0,opacity:active?1:0.35,transition:"opacity 0.4s",pointerEvents:active?"auto":"none"}}>
+    <div style={{opacity:active?1:0.35,transition:"opacity 0.4s",pointerEvents:active?"auto":"none"}}>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
         <div style={{width:24,height:24,borderRadius:"50%",background:active?T.text:T.border,color:active?"#fff":T.muted,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"background 0.3s"}}>{number}</div>
         <span style={{fontSize:13,fontWeight:600,color:active?T.text:T.muted,letterSpacing:"0.02em",textTransform:"uppercase",transition:"color 0.3s"}}>{label}</span>
@@ -81,9 +81,7 @@ function Section({label,number,active,children}){
   );
 }
 
-function Divider(){
-  return <div style={{height:1,background:T.border,margin:"32px 0"}}/>;
-}
+function Divider(){ return <div style={{height:1,background:T.border,margin:"32px 0"}}/>; }
 
 function LoadingBar(){
   const [prog,setProg]=useState(0);
@@ -109,7 +107,8 @@ function LoadingBar(){
 }
 
 export default function PostMe(){
-  const [state,setState]=useState({content:"",contentType:"text",take:"",platform:"",sliders:{tone:50,focus:50,hero:50,length:50}});
+  const [inputMode, setInputMode] = useState("text"); // "text" or "url"
+  const [state,setState]=useState({content:"",take:"",platform:"",sliders:{tone:50,focus:50,hero:50,length:50}});
   const [result,setResult]=useState("");
   const [loading,setLoading]=useState(false);
   const [generating,setGenerating]=useState(false);
@@ -125,9 +124,9 @@ export default function PostMe(){
     setLoading(true);setGenerating(true);setError("");setResult("");
     setTimeout(()=>resultRef.current?.scrollIntoView({behavior:"smooth",block:"start"}),100);
     try{
-      const isUrl = state.contentType==="url";
+      const isUrl = inputMode === "url";
       const prompt = buildPrompt({
-        content: isUrl ? `Fetch the content at ${state.content} and use it as the company content to write about.` : state.content,
+        content: isUrl ? `Fetch and summarise the content at ${state.content} and use it as the company content to write about.` : state.content,
         take:state.take, platform:state.platform, sliders:state.sliders
       });
       const [text]=await Promise.allSettled([
@@ -136,16 +135,16 @@ export default function PostMe(){
       ]);
       setGenerating(false);setLoading(false);
       if(text.status==="fulfilled"){setResult(text.value);}
-      else{setError("Generation failed. Please try again.");}
+      else{setError(text.reason?.message||"Generation failed. Please try again.");}
     }catch(err){
       setGenerating(false);setLoading(false);
       setError(err.message||"Generation failed. Please try again.");
     }
-  },[state]);
+  },[state, inputMode]);
 
   const reset=()=>{
-    setState({content:"",contentType:"text",take:"",platform:"",sliders:{tone:50,focus:50,hero:50,length:50}});
-    setResult("");setError("");setGenerating(false);setLoading(false);
+    setState({content:"",take:"",platform:"",sliders:{tone:50,focus:50,hero:50,length:50}});
+    setResult("");setError("");setGenerating(false);setLoading(false);setInputMode("text");
     window.scrollTo({top:0,behavior:"smooth"});
   };
 
@@ -167,18 +166,30 @@ export default function PostMe(){
 
           {/* Section 1 – Content */}
           <Section label="What are you sharing?" number="1" active={true}>
+
+            {/* Tab bar */}
             <div style={{display:"flex",gap:3,marginBottom:16,background:T.bg,borderRadius:10,padding:3}}>
-              <button onClick={()=>setState(s=>({...s,contentType:"text"}))} style={{flex:1,padding:"8px 0",border:"none",borderRadius:8,cursor:"pointer",background:T.surface,color:T.text,fontWeight:600,fontSize:13,fontFamily:"inherit",boxShadow:"0 1px 4px rgba(0,0,0,0.08)"}}>Paste Text</button>
-              <div style={{flex:1,padding:"8px 4px",borderRadius:8,textAlign:"center",opacity:0.4,userSelect:"none"}}>
-                <div style={{fontSize:13,color:T.muted}}>URL</div>
-                <div style={{fontSize:10,fontWeight:700,color:T.accent,marginTop:2}}>Coming soon</div>
-              </div>
-              <div style={{flex:1,padding:"8px 4px",borderRadius:8,textAlign:"center",opacity:0.4,userSelect:"none"}}>
+              <button
+                onClick={()=>{ setInputMode("text"); setState(s=>({...s,content:""})); }}
+                style={{flex:1,padding:"8px 0",border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:inputMode==="text"?600:400,color:inputMode==="text"?T.text:T.muted,background:inputMode==="text"?T.surface:"transparent",boxShadow:inputMode==="text"?"0 1px 4px rgba(0,0,0,0.08)":"none"}}>
+                Paste Text
+              </button>
+              <button
+                onClick={()=>{ setInputMode("url"); setState(s=>({...s,content:""})); }}
+                style={{flex:1,padding:"8px 0",border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:inputMode==="url"?600:400,color:inputMode==="url"?T.text:T.muted,background:inputMode==="url"?T.surface:"transparent",boxShadow:inputMode==="url"?"0 1px 4px rgba(0,0,0,0.08)":"none"}}>
+                URL
+              </button>
+              <div style={{flex:1,padding:"8px 4px",borderRadius:8,textAlign:"center",opacity:0.4,cursor:"not-allowed",userSelect:"none"}}>
                 <div style={{fontSize:13,color:T.muted}}>Upload File</div>
                 <div style={{fontSize:10,fontWeight:700,color:T.accent,marginTop:2}}>Coming soon</div>
               </div>
             </div>
-            <textarea placeholder="Paste the company post, article, or message here…" value={state.content} onChange={e=>setState(s=>({...s,content:e.target.value,contentType:"text"}))} rows={5} style={{...iStyle,resize:"vertical",lineHeight:1.6}}/>
+
+            {/* Input */}
+            {inputMode==="url"
+              ? <input type="url" placeholder="https://yourcompany.com/blog/post" value={state.content} onChange={e=>setState(s=>({...s,content:e.target.value}))} style={iStyle}/>
+              : <textarea placeholder="Paste the company post, article, or message here…" value={state.content} onChange={e=>setState(s=>({...s,content:e.target.value}))} rows={5} style={{...iStyle,resize:"vertical",lineHeight:1.6}}/>
+            }
           </Section>
 
           <Divider/>
