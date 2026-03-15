@@ -37,8 +37,9 @@ Writing rules — follow these strictly:
 Output ONLY the post text, nothing else.`;
 }
 
-async function callClaude(prompt){
-  const res=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt})});
+async function callClaude(prompt, url=null){
+  const body = url ? { url, prompt } : { prompt };
+  const res=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
   const data=await res.json();
   if(!res.ok)throw new Error(data.error||"Request failed");
   if(!data.text)throw new Error("No response");
@@ -124,8 +125,13 @@ export default function PostMe(){
     setLoading(true);setGenerating(true);setError("");setResult("");
     setTimeout(()=>resultRef.current?.scrollIntoView({behavior:"smooth",block:"start"}),100);
     try{
+      const isUrl = state.contentType==="url";
+      const prompt = buildPrompt({
+        content: isUrl ? `Fetch the content at ${state.content} and use it as the company content to write about.` : state.content,
+        take:state.take, platform:state.platform, sliders:state.sliders
+      });
       const [text]=await Promise.allSettled([
-        callClaude(buildPrompt({content:state.content,take:state.take,platform:state.platform,sliders:state.sliders})),
+        callClaude(prompt, isUrl ? state.content : null),
         new Promise(r=>setTimeout(r,3800)),
       ]);
       setGenerating(false);setLoading(false);
