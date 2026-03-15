@@ -5,36 +5,110 @@ const PLATFORMS = [{id:"linkedin",label:"LinkedIn",icon:"in"},{id:"twitter",labe
 const SLIDERS = [{id:"tone",label:"Tone of Voice",left:"Informative",right:"Excited",emoji:"🎙️"},{id:"focus",label:"Focus",left:"Practical",right:"Strategic",emoji:"🔭"},{id:"hero",label:"Hero",left:"My Company",right:"Me",emoji:"🦸"},{id:"length",label:"Length",left:"Short & punchy",right:"Long & detailed",emoji:"📏"}];
 const HYPE_LINES = ["You're about to go viral. Probably. 🤞","Ghostwriting your way to internet fame…","Who's the next LinkedIn legend? You are.","Sprinkling just the right amount of cringe…","Making you sound smart AND relatable. No small feat.","Your followers won't know what hit them. 👀","Crafting words that'll make your boss double-tap.","You're literally killing it right now.","This post? Chef's kiss. Almost done.","Distilling your personal brand. It's glowing.","The algorithm is already nervous. Good.","Hold tight — greatness takes 4 seconds."];
 
-function buildPrompt({content,take,platform,sliders}){
+const STYLES = {
+  Narrative: {
+    label: "Narrative",
+    desc: "Personal story arc with unresolved tension",
+    emoji: "📖",
+    rules: `Style: NARRATIVE
+- Open with a moral dilemma or personal tension, not an observation
+- Use a real story arc: situation → tension → turning point → insight
+- Use extreme specificity — real details (numbers, places, timeframes) make it feel true
+- Don't resolve everything neatly. Sit in the discomfort
+- Admit weakness or uncertainty when relevant — it's more powerful than a clean lesson
+- Go from specific personal experience → universal human truth, not the reverse
+- Close with a genuine question you don't already know the answer to, or a reflection that lingers`
+  },
+  Insight: {
+    label: "Insight",
+    desc: "Logical build from observation to earned principle",
+    emoji: "💡",
+    rules: `Style: INSIGHT
+- Open with a specific observation or counterintuitive finding
+- Build logically: observation → experiment or evidence → result → principle
+- Use specific numbers and details as proof, even if approximate ("15 minutes here, 30 minutes there")
+- Each paragraph should add a new layer — never repeat the same point
+- Earn the right to state a principle at the end by showing evidence first
+- State your belief directly and confidently at the close — no need for a question
+- No hashtags needed if the insight is strong enough`
+  },
+  Craft: {
+    label: "Craft",
+    desc: "Self-aware, rhythmic — the form demonstrates the point",
+    emoji: "✍️",
+    rules: `Style: CRAFT
+- The post should demonstrate its own point through its form
+- Vary paragraph length deliberately and rhythmically — mix one-liners with longer passages
+- Never let three consecutive paragraphs be the same length
+- Use direct address: pull the reader into an active experience ("Try this", "Notice what just happened")
+- Share one specific, slightly odd, memorable technique or habit — not a framework
+- Be playful and self-aware about the craft
+- End with a single confident word or short phrase — not a question`
+  }
+};
+
+const STYLE_CYCLE = ["Narrative","Insight","Craft"];
+
+function buildPrompt({content, take, platform, sliders, forceStyle=null}){
   const tone=sliders.tone<40?"informative and factual":sliders.tone>60?"enthusiastic and excited":"balanced";
   const focus=sliders.focus<40?"practical and tactical":sliders.focus>60?"strategic and big-picture":"a mix of practical and strategic";
   const hero=sliders.hero<40?"centered on the company":sliders.hero>60?"written from a personal I perspective":"balanced between company and personal";
   const length=sliders.length<40?"very short — maximum 1 paragraph, 2-3 sentences only, no fluff, but do include relevant hashtags":sliders.length>60?"long and detailed, using the full character/word limit of the platform":"medium length, 1–2 paragraphs";
   const pg={linkedin:"LinkedIn (1–3 short paragraphs, 150–250 words, max 3 hashtags)",twitter:"X/Twitter (max 280 characters, punchy)",instagram:"Instagram (casual caption, 1–2 paragraphs, 3–5 hashtags, assumes a visual will accompany the post)",facebook:"Facebook (conversational, 1–3 paragraphs, 100–200 words, no more than 2 hashtags)"}[platform];
-  return `You are a social media ghostwriter helping an employee share company content on their personal account. Your goal is to write something that sounds like a real human wrote it — not an AI, not a marketing department.
+
+  const linkedinStyle = platform === "linkedin" ? `
+## Post Style
+${forceStyle
+  ? `Use the ${forceStyle} style as defined below.`
+  : `Read the content and choose the most fitting style from the three below. Pick Narrative if the content has a human story or tension. Pick Insight if it contains data, research, or a logical argument. Pick Craft if it's about process, communication, or a meta topic.`}
+
+${Object.values(STYLES).map(s=>s.rules).join("\n\n")}
+
+## Output format
+Your response must start with exactly this on the first line: [STYLE:Narrative] or [STYLE:Insight] or [STYLE:Craft]
+Then a blank line.
+Then the post text only. Nothing else.
+
+## Universal LinkedIn rules
+- One idea only. Pick the strongest angle.
+- Hook in the first 2 lines. Never an announcement opener.
+- Never: "I'm excited to share", "Thrilled to announce", "Big news", "Here's why", humblebrags
+- Short paragraphs, 1–3 sentences. Line breaks between thoughts. Never every sentence as its own line.
+- Voice: "I" not "we". Honest over polished.
+- Hashtags at the very end, 0–3, never inline. Strong content may need none.
+- Max 1 emoji or none.
+- No motivational poster language. No fortune cookie lessons.` : "";
+
+  const universalRules = `
+## Universal rules
+- No em dashes (—) anywhere
+- No hollow openers
+- No buzzwords: "delve", "foster", "leverage", "game-changer", "landscape", "unleash", "groundbreaking", "innovative"
+- No rhetorical sign-off questions like "What do you think?" or "Have you experienced this?"
+- Vary sentence length naturally
+- No corporate speak`;
+
+  return `You are a social media ghostwriter helping an employee share company content on their personal account. Write something that sounds like a real human — not AI, not marketing.
 
 Company content:
 ---
 ${content}
 ---
-${take?`\nEmployee's personal take: "${take}"`:""}
-
+${take?`\nEmployee's personal take: "${take}"\n`:""}
 Platform: ${pg}
 Tone: ${tone}
 Focus: ${focus}
 Perspective: ${hero}
 Length: ${length}
+${linkedinStyle}
+${platform !== "linkedin" ? universalRules : ""}
+${platform !== "linkedin" ? "\nOutput ONLY the post text, nothing else." : ""}`;
+}
 
-Writing rules — follow these strictly:
-- Write like a person talking to a friend, not a copywriter hitting bullet points
-- No em dashes (—) anywhere
-- No hollow openers like "Excited to share", "Thrilled to announce", "Big news" or "Here's why"
-- No buzzwords: "delve", "foster", "leverage", "game-changer", "landscape", "unleash", "dive in"
-- No rhetorical sign-off questions like "What do you think?" or "Have you experienced this?"
-- Vary sentence length — mix short punchy sentences with longer ones naturally
-- If using LinkedIn, write like a thoughtful person sharing a genuine observation, not a personal brand post
-
-Output ONLY the post text, nothing else.`;
+function parseStyleFromResponse(text){
+  const match = text.match(/^\[STYLE:(Narrative|Insight|Craft)\]\n\n?/);
+  if(match) return { style: match[1], post: text.slice(match[0].length).trim() };
+  return { style: null, post: text.trim() };
 }
 
 async function callClaude(prompt, url){
@@ -107,9 +181,10 @@ function LoadingBar(){
 }
 
 export default function PostMe(){
-  const [inputMode, setInputMode] = useState("text"); // "text" or "url"
+  const [inputMode, setInputMode] = useState("text");
   const [state,setState]=useState({content:"",take:"",platform:"",sliders:{tone:50,focus:50,hero:50,length:50}});
   const [result,setResult]=useState("");
+  const [detectedStyle,setDetectedStyle]=useState(null);
   const [loading,setLoading]=useState(false);
   const [generating,setGenerating]=useState(false);
   const [error,setError]=useState("");
@@ -120,31 +195,43 @@ export default function PostMe(){
   const hasPlatform=!!state.platform;
   const canGenerate=hasContent&&hasPlatform;
 
-  const generate=useCallback(async()=>{
+  const generate=useCallback(async(forceStyle=null)=>{
     setLoading(true);setGenerating(true);setError("");setResult("");
     setTimeout(()=>resultRef.current?.scrollIntoView({behavior:"smooth",block:"start"}),100);
     try{
       const isUrl = inputMode === "url";
       const prompt = buildPrompt({
         content: isUrl ? `Fetch and summarise the content at ${state.content} and use it as the company content to write about.` : state.content,
-        take:state.take, platform:state.platform, sliders:state.sliders
+        take:state.take, platform:state.platform, sliders:state.sliders, forceStyle
       });
-      const [text]=await Promise.allSettled([
+      const [raw]=await Promise.allSettled([
         callClaude(prompt, isUrl ? state.content : null),
         new Promise(r=>setTimeout(r,3800)),
       ]);
       setGenerating(false);setLoading(false);
-      if(text.status==="fulfilled"){setResult(text.value);}
-      else{setError(text.reason?.message||"Generation failed. Please try again.");}
+      if(raw.status==="fulfilled"){
+        const {style, post} = parseStyleFromResponse(raw.value);
+        setDetectedStyle(style);
+        setResult(post);
+      } else {
+        setError(raw.reason?.message||"Generation failed. Please try again.");
+      }
     }catch(err){
       setGenerating(false);setLoading(false);
       setError(err.message||"Generation failed. Please try again.");
     }
   },[state, inputMode]);
 
+  const tryDifferentStyle = useCallback(()=>{
+    const current = detectedStyle || STYLE_CYCLE[0];
+    const idx = STYLE_CYCLE.indexOf(current);
+    const next = STYLE_CYCLE[(idx+1) % STYLE_CYCLE.length];
+    generate(next);
+  },[detectedStyle, generate]);
+
   const reset=()=>{
     setState({content:"",take:"",platform:"",sliders:{tone:50,focus:50,hero:50,length:50}});
-    setResult("");setError("");setGenerating(false);setLoading(false);setInputMode("text");
+    setResult("");setError("");setGenerating(false);setLoading(false);setInputMode("text");setDetectedStyle(null);
     window.scrollTo({top:0,behavior:"smooth"});
   };
 
@@ -164,28 +251,15 @@ export default function PostMe(){
       <main style={{maxWidth:540,margin:"24px auto 80px"}}>
         <div style={{background:T.surface,borderRadius:20,border:`1px solid ${T.border}`,padding:"36px 36px 32px",boxShadow:"0 2px 24px rgba(0,0,0,0.05)"}}>
 
-          {/* Section 1 – Content */}
           <Section label="What are you sharing?" number="1" active={true}>
-
-            {/* Tab bar */}
             <div style={{display:"flex",gap:3,marginBottom:16,background:T.bg,borderRadius:10,padding:3}}>
-              <button
-                onClick={()=>{ setInputMode("text"); setState(s=>({...s,content:""})); }}
-                style={{flex:1,padding:"8px 0",border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:inputMode==="text"?600:400,color:inputMode==="text"?T.text:T.muted,background:inputMode==="text"?T.surface:"transparent",boxShadow:inputMode==="text"?"0 1px 4px rgba(0,0,0,0.08)":"none"}}>
-                Paste Text
-              </button>
-              <button
-                onClick={()=>{ setInputMode("url"); setState(s=>({...s,content:""})); }}
-                style={{flex:1,padding:"8px 0",border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:inputMode==="url"?600:400,color:inputMode==="url"?T.text:T.muted,background:inputMode==="url"?T.surface:"transparent",boxShadow:inputMode==="url"?"0 1px 4px rgba(0,0,0,0.08)":"none"}}>
-                URL
-              </button>
+              <button onClick={()=>{ setInputMode("text"); setState(s=>({...s,content:""})); }} style={{flex:1,padding:"8px 0",border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:inputMode==="text"?600:400,color:inputMode==="text"?T.text:T.muted,background:inputMode==="text"?T.surface:"transparent",boxShadow:inputMode==="text"?"0 1px 4px rgba(0,0,0,0.08)":"none"}}>Paste Text</button>
+              <button onClick={()=>{ setInputMode("url"); setState(s=>({...s,content:""})); }} style={{flex:1,padding:"8px 0",border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:inputMode==="url"?600:400,color:inputMode==="url"?T.text:T.muted,background:inputMode==="url"?T.surface:"transparent",boxShadow:inputMode==="url"?"0 1px 4px rgba(0,0,0,0.08)":"none"}}>URL</button>
               <div style={{flex:1,padding:"8px 4px",borderRadius:8,textAlign:"center",opacity:0.4,cursor:"not-allowed",userSelect:"none"}}>
                 <div style={{fontSize:13,color:T.muted}}>Upload File</div>
                 <div style={{fontSize:10,fontWeight:700,color:T.accent,marginTop:2}}>Coming soon</div>
               </div>
             </div>
-
-            {/* Input */}
             {inputMode==="url"
               ? <input type="url" placeholder="https://yourcompany.com/blog/post" value={state.content} onChange={e=>setState(s=>({...s,content:e.target.value}))} style={iStyle}/>
               : <textarea placeholder="Paste the company post, article, or message here…" value={state.content} onChange={e=>setState(s=>({...s,content:e.target.value}))} rows={5} style={{...iStyle,resize:"vertical",lineHeight:1.6}}/>
@@ -194,7 +268,6 @@ export default function PostMe(){
 
           <Divider/>
 
-          {/* Section 2 – Voice */}
           <Section label="Your voice" number="2" active={hasContent}>
             <label style={{display:"block",fontSize:12,fontWeight:600,color:T.text,marginBottom:8,letterSpacing:"0.04em",textTransform:"uppercase"}}>Your take <span style={{color:T.muted,fontWeight:400,textTransform:"none"}}>(optional)</span></label>
             <textarea placeholder='e.g. "This is huge for our industry"' value={state.take} onChange={e=>setState(s=>({...s,take:e.target.value}))} rows={2} style={{...iStyle,resize:"none",lineHeight:1.6,marginBottom:24}}/>
@@ -211,29 +284,33 @@ export default function PostMe(){
 
           <Divider/>
 
-          {/* Section 3 – Style */}
           <Section label="Your style" number="3" active={hasContent&&hasPlatform}>
             {SLIDERS.map(sl=><SliderRow key={sl.id} slider={sl} value={state.sliders[sl.id]} onChange={v=>setState(s=>({...s,sliders:{...s.sliders,[sl.id]:v}}))}/>)}
           </Section>
 
           <Divider/>
 
-          {/* Generate */}
           <div style={{opacity:canGenerate?1:0.35,transition:"opacity 0.4s",pointerEvents:canGenerate?"auto":"none"}}>
-            <Btn onClick={generate} disabled={loading||!canGenerate} style={{width:"100%",textAlign:"center",fontSize:15,padding:"16px 24px"}}>
+            <Btn onClick={()=>generate(null)} disabled={loading||!canGenerate} style={{width:"100%",textAlign:"center",fontSize:15,padding:"16px 24px"}}>
               {loading?"✦ Writing…":"✦ Generate Post"}
             </Btn>
           </div>
 
-          {/* Result */}
           {(generating||result||error)&&(
             <div ref={resultRef} style={{marginTop:32,paddingTop:32,borderTop:`1px solid ${T.border}`}}>
               {generating&&<LoadingBar/>}
               {!generating&&result&&(
                 <>
-                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
-                    <div style={{width:8,height:8,borderRadius:"50%",background:"#22C55E",flexShrink:0}}/>
-                    <span style={{fontSize:13,color:T.muted,fontWeight:500}}>Ready to post on {PLATFORMS.find(x=>x.id===state.platform)?.label}</span>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:8}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <div style={{width:8,height:8,borderRadius:"50%",background:"#22C55E",flexShrink:0}}/>
+                      <span style={{fontSize:13,color:T.muted,fontWeight:500}}>Ready to post on {PLATFORMS.find(x=>x.id===state.platform)?.label}</span>
+                    </div>
+                    {detectedStyle&&state.platform==="linkedin"&&(
+                      <div style={{display:"flex",alignItems:"center",gap:6,background:T.bg,borderRadius:20,padding:"4px 10px"}}>
+                        <span style={{fontSize:11,color:T.muted}}>{STYLES[detectedStyle]?.emoji} {detectedStyle} style</span>
+                      </div>
+                    )}
                   </div>
                   {state.platform==="instagram"&&<div style={{display:"flex",gap:10,alignItems:"flex-start",background:T.accentLight,border:`1.5px solid #F0C4AD`,borderRadius:10,padding:"11px 14px",marginBottom:16}}>
                     <span style={{fontSize:16,flexShrink:0}}>📸</span>
@@ -242,7 +319,8 @@ export default function PostMe(){
                   <textarea value={result} onChange={e=>setResult(e.target.value)} style={{width:"100%",background:T.surface,border:`1.5px solid ${T.border}`,borderRadius:14,padding:"20px",marginBottom:16,fontSize:15,color:T.text,lineHeight:1.75,fontFamily:"inherit",resize:"vertical",outline:"none",boxSizing:"border-box",minHeight:160}}/>
                   <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                     <Btn onClick={()=>{navigator.clipboard.writeText(result);setCopied(true);setTimeout(()=>setCopied(false),2000);}} variant="accent">{copied?"✓ Copied!":"Copy Post"}</Btn>
-                    <Btn variant="ghost" onClick={generate} disabled={loading}>{loading?"Writing…":"↺ Regenerate"}</Btn>
+                    <Btn variant="ghost" onClick={()=>generate(null)} disabled={loading}>{loading?"Writing…":"↺ Regenerate"}</Btn>
+                    {state.platform==="linkedin"&&<Btn variant="ghost" onClick={tryDifferentStyle} disabled={loading}>↝ Try different style</Btn>}
                     <Btn variant="ghost" onClick={reset}>Start Over</Btn>
                   </div>
                 </>
